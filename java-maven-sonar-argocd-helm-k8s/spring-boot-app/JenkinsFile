@@ -1,7 +1,7 @@
 pipeline {
   agent {
     docker {
-      image 'abhishekf5/maven-abhishek-docker-agent:v1'
+      image 'maven:3.9.4-eclipse-temurin-17' // Java 17 + Maven
       args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
     }
   }
@@ -13,6 +13,12 @@ pipeline {
   }
 
   stages {
+    stage('Verify Java Version') {
+      steps {
+        sh 'java -version'
+      }
+    }
+
     stage('Checkout') {
       steps {
         echo 'Checking out code...'
