@@ -9,7 +9,7 @@ pipeline {
   environment {
     PROJECT_DIR = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
     DOCKER_IMAGE = "gokul0880/ci-cd-project:${BUILD_NUMBER}"
-    SONAR_URL = "http://localhost:9000" // SonarQube on same EC2
+    SONAR_URL = "http://3.90.162.117:9000"
   }
 
   stages {
