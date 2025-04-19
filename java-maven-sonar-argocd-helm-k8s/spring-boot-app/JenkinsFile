@@ -1,98 +1,101 @@
 pipeline {
-  agent {
-    docker {
-      image 'maven:3.9.4-eclipse-temurin-17' // Java 17 + Maven
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
-
-  environment {
-    PROJECT_DIR = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
-    DOCKER_IMAGE = "gokul0880/ci-cd-project:${BUILD_NUMBER}"
-    SONAR_URL = "http://3.90.162.117:9000"
-  }
-
-  stages {
-    stage('Verify Java Version') {
-      steps {
-        sh 'java -version'
-      }
-    }
-
-    stage('Checkout') {
-      steps {
-        echo 'Checking out code...'
-        // Uncomment this when needed
-        // git branch: 'main', url: 'https://github.com/gokul-badrappan/Jenkins-Zero-To-Hero.git'
-      }
-    }
-
-    stage('Build & Test') {
-      steps {
-        echo 'Building project...'
-        sh "cd $PROJECT_DIR && mvn clean package"
-      }
-    }
-
-    stage('Static Code Analysis') {
-      steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh """
-            cd $PROJECT_DIR
-            mvn sonar:sonar \
-              -Dsonar.projectKey=ci-cd-project \
-              -Dsonar.host.url=$SONAR_URL \
-              -Dsonar.login=$SONAR_AUTH_TOKEN
-          """
+    agent {
+        docker {
+            image 'maven:3.9.4-eclipse-temurin-17' // Java 17 + Maven
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
-      }
     }
 
-    stage('Docker Build & Push') {
-      environment {
-        REGISTRY_CREDENTIALS = credentials('docker-cred')
-      }
-      steps {
-        echo 'Building Docker image...'
-        script {
-          sh "cd $PROJECT_DIR && docker build -t $DOCKER_IMAGE ."
-          def dockerImage = docker.image("$DOCKER_IMAGE")
-          docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
-            dockerImage.push()
-          }
+    environment {
+        PROJECT_DIR = 'java-maven-sonar-argocd-helm-k8s/spring-boot-app'
+        DOCKER_IMAGE = "gokul0880/ci-cd-project:${BUILD_NUMBER}"
+        SONAR_URL = "http://3.90.162.117:9000"
+    }
+
+    stages {
+        stage('Verify Java Version') {
+            steps {
+                sh 'java -version'
+            }
         }
-      }
-    }
 
-    stage('Update K8s Deployment') {
-      environment {
-        GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-        GIT_USER_NAME = "gokul-badrappan"
-      }
-      steps {
-        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-          sh """
-            git config user.email "gokul0880@gmail.com"
-            git config user.name "Gokul Badrappan"
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git commit -m "Update image tag to ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-          """
+        stage('Checkout') {
+            steps {
+                echo 'Checking out code...'
+                // Uncomment this when needed
+                // git branch: 'main', url: 'https://github.com/gokul-badrappan/Jenkins-Zero-To-Hero.git'
+            }
         }
-      }
-    }
-  }
 
-  post {
-    success {
-      echo "🎉 Pipeline executed successfully!"
+        stage('Build & Test') {
+            steps {
+                echo 'Building project...'
+                sh "cd $PROJECT_DIR && mvn clean package"
+            }
+        }
+
+        stage('Static Code Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
+                    sh """
+                        cd $PROJECT_DIR
+                        mvn sonar:sonar \
+                          -Dsonar.projectKey=ci-cd-project \
+                          -Dsonar.host.url=$SONAR_URL \
+                          -Dsonar.login=$SONAR_AUTH_TOKEN
+                    """
+                }
+            }
+        }
+
+        stage('Docker Build & Push') {
+            environment {
+                REGISTRY_CREDENTIALS = credentials('docker-cred')
+            }
+            steps {
+                echo 'Building Docker image...'
+                script {
+                    // Use Docker image directly in the pipeline agent block
+                    docker.image('docker:latest').inside {
+                        sh "cd $PROJECT_DIR && docker build -t $DOCKER_IMAGE ."
+                        def dockerImage = docker.image("$DOCKER_IMAGE")
+                        docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
+                            dockerImage.push()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Update K8s Deployment') {
+            environment {
+                GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
+                GIT_USER_NAME = "gokul-badrappan"
+            }
+            steps {
+                withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+                    sh """
+                        git config user.email "gokul0880@gmail.com"
+                        git config user.name "Gokul Badrappan"
+                        sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+                        git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+                        git commit -m "Update image tag to ${BUILD_NUMBER}"
+                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                    """
+                }
+            }
+        }
     }
-    failure {
-      echo "❌ Pipeline failed. Please check the logs."
+
+    post {
+        success {
+            echo "🎉 Pipeline executed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed. Please check the logs."
+        }
+        always {
+            cleanWs()
+        }
     }
-    always {
-      cleanWs()
-    }
-  }
 }
