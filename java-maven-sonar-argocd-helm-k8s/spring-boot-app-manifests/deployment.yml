@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: spring-boot-app
-        image: gokul0880/ci-cd-project:replaceImageTag
+        image: gokul0880/spring-boot-app:latest
         ports:
         - containerPort: 8080
